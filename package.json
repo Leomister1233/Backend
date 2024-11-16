@@ -11,11 +11,15 @@
   "author": "LeonardoCarvalho",
   "license": "ISC",
   "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.1.0",
+    "@turf/helpers": "^7.1.0",
     "backend": "file:",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "install": "^0.13.0",
     "mongodb": "^6.10.0",
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.7",
+    "npm": "^10.9.0"
   }
 }

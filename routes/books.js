@@ -8,13 +8,13 @@ const router = express.Router();
 router.get("/", async (req, res) => {
     try {
         const results = await db.collection('books').find({}).limit(50).toArray();
-        res.status(200).send(results); // Set status before sending response
+        res.status(200).send(results); 
     } catch (error) {
         res.status(500).json({ message: "Error retrieving books", error: error.message });
     }
 });
 
-// Get books with pagination
+// Lista de livros com paginação. Get localhost:3000/api/books/getbook
 router.get("/getbook", async (req, res) => {
     try {
         const booksCollection = db.collection("books");
@@ -24,52 +24,53 @@ router.get("/getbook", async (req, res) => {
         const skip = (page - 1) * limit;
 
         const books = await booksCollection.find({}).skip(skip).limit(limit).toArray();
-        const totalBooks = await booksCollection.countDocuments(); // Get total number of books
+        const totalBooks = await booksCollection.countDocuments(); 
 
-        // Calculate total pages and determine next/prev page links
+ 
         const totalPages = Math.ceil(totalBooks / limit);
         const nextPage = page < totalPages ? `${req.protocol}://${req.get('host')}${req.baseUrl}/getbook?page=${page + 1}&limit=${limit}` : null;
         const prevPage = page > 1 ? `${req.protocol}://${req.get('host')}${req.baseUrl}/getbook?page=${page - 1}&limit=${limit}` : null;
 
         res.status(200).json({
-            count: totalBooks, // Total number of books
-            pages: totalPages, // Total pages
-            next: nextPage, // Link to the next page
-            prev: prevPage, // Link to the previous page
-            currentPage: page, // Current page number
-            books, // List of books for the current page
+            count: totalBooks, 
+            pages: totalPages, 
+            next: nextPage, 
+            prev: prevPage, 
+            currentPage: page, 
+            books, 
         });
     } catch (error) {
         res.status(500).json({ message: "Error retrieving books", error: error.message });
     }
 });
 
+//Pesquisar pelo _id(users) Get localhost:3000/api/books/book/:id
 
 router.get('/searchbook/:id', async (req, res) => {
     try {
         const { id } = req.params; 
-        const book_id = parseInt(id.replace(':', ''), 10); // Extract book ID
+        const book_id = parseInt(id.replace(':', ''), 10); 
         const booksCollection = db.collection('books');
         const commentsCollection = db.collection('comments');
         const usersCollection = db.collection('users');
 
-        // Fetch the book from the collection by _id
+   
         const book = await booksCollection.findOne({ _id: book_id });
         if (!book) {
             return res.status(404).json({ message: "Livro não encontrado." });
         }
 
-        // Pagination for reviews
+ 
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 5; // Limit reviews per page
+        const limit = parseInt(req.query.limit) || 20; 
         const skip = (page - 1) * limit;
 
-        // Fetch reviews and calculate the average score
+ 
         const userReviews = await usersCollection.aggregate([
             { $unwind: "$reviews" },
             { $match: { "reviews.book_id": book_id } },
-            { $skip: skip }, // Skip based on pagination
-            { $limit: limit }, // Limit based on pagination
+            { $skip: skip },
+            { $limit: limit }, 
             {
                 $group: {
                     _id: null,
@@ -79,16 +80,15 @@ router.get('/searchbook/:id', async (req, res) => {
             }
         ]).toArray();
 
-        // Extract average score and reviews
+    
         const averageScore = userReviews.length > 0 ? userReviews[0].averageScore : null;
         const reviews = userReviews.length > 0 ? userReviews[0].reviews : [];
 
-        // Pagination for comments
         const commentPage = parseInt(req.query.commentPage) || 1;
         const commentLimit = parseInt(req.query.commentLimit) || 20;
         const commentSkip = (commentPage - 1) * commentLimit;
 
-        // Fetch comments related to the book with pagination
+
         const comments = await commentsCollection.aggregate([
             { $match: { book_id: book_id } },
             { $skip: commentSkip },
@@ -96,11 +96,10 @@ router.get('/searchbook/:id', async (req, res) => {
             { $project: { comment: 1, _id: 0 } }
         ]).toArray();
 
-        // Fetch total counts for comments and reviews for pagination info
+    
         const totalComments = await commentsCollection.countDocuments({ book_id: book_id });
         const totalReviews = userReviews.length > 0 ? userReviews[0].reviews.length : 0;
 
-        // Prepare and send the response
         const response = {
             pagination: {
                 reviews: {
@@ -131,142 +130,162 @@ router.get('/searchbook/:id', async (req, res) => {
     }
 });
 
+//Adicionar 1 ou vários livros. Post localhost:3000/api/books/createbooks
 
-
-router.post('/createbooks',async (req,res)=>{
-    try{
+router.post('/createbooks', async (req, res) => {
+    try {
         const booksCollection = db.collection('books');
-        const lastBooks = await usersCollection.find().sort({ _id: -1 }).limit(1).toArray();
+        const lastBooks = await booksCollection.find().sort({ _id: -1 }).limit(1).toArray();
 
-         // Determine the new user's ID by incrementing the last user's 
-        const newBookId = lastUser.length > 0 ? lastBooks[0]._id + 1 : 1;
-        const newBook ={
+        const newBookId = lastBooks.length > 0 ? lastBooks[0]._id + 1 : 1;
+
+        const newBook = {
             _id: newBookId,
-            title: "Learning React",
-            isbn: "9781491954621",
-            pageCount: 350,
-            publishedDate: new Date("2017-06-01T07:00:00.000+00:00"),
-            thumbnailUrl: "https://example.com/book-thumb-images/learning-react.jpg",
-            shortDescription: "Learning React introduces the essentials of React, a popular JavaScript library.",
-            longDescription: "React is a powerful library for creating dynamic user interfaces. This book covers the basics, advanced patterns, and practical applications of React.",
+            title: "Unlocking Android",
+            isbn: "1933988673",
+            pageCount: 416,
+            publishedDate: new Date("2009-04-01T07:00:00.000+00:00"),
+            thumbnailUrl: "https://s3.amazonaws.com/AKIAJC5RLADLUMVRPFDQ.book-thumb-images/ableso…",
+            shortDescription: "Unlocking Android: A Developer's Guide provides concise, hands-on instructions for building apps...",
+            longDescription: "Android is an open source mobile phone platform based on the Linux operating system...",
             status: "PUBLISH",
-            authors: ["Alex Banks", "Eve Porcello"],
-            categories: ["JavaScript", "Web Development"] 
+            authors: ["John Doe", "Jane Smith", "Alex Johnson"],
+            categories: ["Android", "Mobile Development"]
+        };
+
+        const createBookResult = await booksCollection.insertOne(newBook);
+
+        if (createBookResult.insertedId) {
+            res.status(201).json({
+                message: "Book created successfully",
+                book: { _id: createBookResult.insertedId, ...newBook }
+            });
+        } else {
+            res.status(500).json({ message: "Error inserting book", result: createBookResult });
         }
-        const createbooks = await booksCollection.inserOne(newBook) 
-    }catch(error){
-        res.status(500).json({message:"Error creating books", error: error.message});
+
+    } catch (error) {
+        console.error("Error creating book:", error);  
+        res.status(500).json({ message: "Error creating book", error: error.message });
     }
-})
+});
+
+//Remover livro pelo _id  Delete localhost:3000/api/books/deletebook/:id
+
 
 router.delete('/deletebook/:id', async (req, res) => {
     try {
         const { id } = req.params; 
-        const book_id = parseInt(id.replace(':', ''), 10);
+        const book_id = parseInt(id.replace(':', ''), 10); 
         const booksCollection = db.collection('books');
-        const deletebook= booksCollection.db.delete({_id: book_id})
-        if (deletebook.result.n === 0) {
+
+        // Perform the deletion operation
+        const deleteBookResult = await booksCollection.deleteOne({ _id: book_id });
+
+        if (deleteBookResult.deletedCount === 0) {
             return res.status(404).json({ message: "Livro não encontrado." });
         }
-        if(deletebook.result.n === 1) {
-            return res.status(204).json({ message: "Livro excluído com sucesso." });  // No Content status code
-        }
-      
+
+        return res.status(200).json({ message: "Livro excluído com sucesso." }); 
+
     } catch (error) {
-        res.status(500).json({ message: "Error retrieving book", error: error.message });
+        res.status(500).json({ message: "Error deleting book", error: error.message });
     }
 });
+
+//Lista de livros que têm comentários. Ordenado pelo número total de comentários.
+//GET localhost:3000/api/books/comments
 
 router.get('/comments', async (req, res) => {
     try {
         const booksCollection = db.collection('books');
         const commentsCollection = db.collection('comments');
 
-        // Pagination parameters
+        
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 5; // Limit books per page
+        const limit = parseInt(req.query.limit) || 20; 
         const skip = (page - 1) * limit;
 
-        // Retrieve books with comments and their respective count
+   
         const booksWithComments = await booksCollection.aggregate([
             {
                 $lookup: {
-                    from: "comments",  // Collection of comments
-                    localField: "_id",  // Field in the books collection
-                    foreignField: "book_id",  // Field in the comments collection
-                    as: "comments"  // Store related comments in this field
+                    from: "comments",  
+                    localField: "_id",  
+                    foreignField: "book_id",  
+                    as: "comments"  
                 }
             },
             {
                 $addFields: {
-                    commentCount: { $size: "$comments" }  // Add the comment count
+                    commentCount: { $size: "$comments" }  
                 }
             },
             {
                 $match: {
-                    commentCount: { $gt: 0 }  // Only include books with at least one comment
+                    commentCount: { $gt: 0 }  
                 }
             },
             {
-                $sort: { commentCount: -1 }  // Sort by comment count in descending order
+                $sort: { commentCount: -1 } 
             },
             {
-                $skip: skip,  // Skip based on page
+                $skip: skip,  
             },
             {
-                $limit: limit,  // Limit based on page
+                $limit: limit,  
             },
             {
                 $project: {
-                    title: 1,  // Include book title in response
-                    commentCount: 1  // Include comment count in response
+                    title: 1,  
+                    commentCount: 1  
                 }
             }
         ]).toArray();
 
-        // Fetch total count of books with comments for pagination info
         const totalBooksWithComments = await booksCollection.aggregate([
             {
                 $lookup: {
-                    from: "comments",  // Collection of comments
-                    localField: "_id",  // Field in the books collection
-                    foreignField: "book_id",  // Field in the comments collection
-                    as: "comments"  // Store related comments in this field
+                    from: "comments",  
+                    localField: "_id",  
+                    foreignField: "book_id",  
+                    as: "comments"  
                 }
             },
             {
                 $addFields: {
-                    commentCount: { $size: "$comments" }  // Add the comment count
+                    commentCount: { $size: "$comments" }  
                 }
             },
             {
                 $match: {
-                    commentCount: { $gt: 0 }  // Only include books with at least one comment
+                    commentCount: { $gt: 0 } 
                 }
             },
             {
-                $count: "total"  // Count the total number of books with comments
+                $count: "total"  
             }
         ]).toArray();
 
         const totalCount = totalBooksWithComments.length > 0 ? totalBooksWithComments[0].total : 0;
 
-        // Calculate total pages for pagination
+
         const totalPages = Math.ceil(totalCount / limit);
 
-        // Response object with pagination info
-        const response = {
-            books: booksWithComments,
+     
+        const response = { 
             pagination: {
                 count: totalCount,
                 pages: totalPages,
                 currentPage: page,
                 next: page < totalPages ? `/api/books/comments?page=${page + 1}&limit=${limit}` : null,
                 prev: page > 1 ? `/api/books/comments?page=${page - 1}&limit=${limit}` : null
-            }
+            },
+            books: booksWithComments,
+           
         };
 
-        // Send response with books and pagination info
+      
         res.status(200).json(response);
 
     } catch (error) {
@@ -275,57 +294,288 @@ router.get('/comments', async (req, res) => {
     }
 });
 
+//Lista de livros filtrada por preço, categoria e/ou autor. 
+//GET localhost:3000/api/books/search/categories/:category
 
-router.get('/search/categories', async (req, res) => {
+router.get('/search/categories/:category', async (req, res) => {
     try {
+        let { category } = req.params;  
+        category = category.replace(":", "");
         const booksCollection = db.collection('books');
 
-        // Pagination parameters
+     
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10; // Default limit to 10 categories
+        const limit = parseInt(req.query.limit) || 10; 
         const skip = (page - 1) * limit;
 
-        // Search and paginate categories
-        const categories = await booksCollection.aggregate([
-            { $unwind: "$categories" }, // Unwind the categories array
-            {
-                $group: {
-                    _id: "$categories", // Group by category
-                    books: {
-                        $push: {
-                            _id: "$_id",
-                            title: "$title",
-                            authors: "$authors",
-                            publishedDate: "$publishedDate",
-                            thumbnailUrl: "$thumbnailUrl",
-                        },
-                    },
-                },
-            },
-            { $sort: { _id: 1 } }, // Sort categories alphabetically
-            { $skip: skip }, // Apply pagination
-            { $limit: limit },
+    
+        const aggregationPipeline = [
+            { $unwind: "$categories" },  
+            { $match: { "categories": category } },  
+            { $skip: skip },  
+            { $limit: limit },  
+            { $sort: { title: 1 } } 
+        ];
+
+     
+        const books = await booksCollection.aggregate(aggregationPipeline).toArray();
+
+        const totalBooks = await booksCollection.aggregate([
+            { $unwind: "$categories" },
+            { $match: { "categories": category } },
+            { $count: "count" }
         ]).toArray();
 
-        // Count total unique categories
-        const totalCategories = await booksCollection.distinct("categories");
-        const totalPages = Math.ceil(totalCategories.length / limit);
+        const totalCount = totalBooks.length > 0 ? totalBooks[0].count : 0;
+        const totalPages = Math.ceil(totalCount / limit);
 
         const response = {
-                pagination: {
-                count: totalCategories.length,
+            pagination: {
+                count: totalCount,
                 pages: totalPages,
                 currentPage: page,
-                next: page < totalPages ? `/api/books/search/categories?page=${page + 1}&limit=${limit}` : null,
-                prev: page > 1 ? `/api/books/search/categories?page=${page - 1}&limit=${limit}` : null,
+                next: page < totalPages ? `/api/books/search/categories/${category}?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/books/search/categories/${category}?page=${page - 1}&limit=${limit}` : null,
             },
-            categories: categories,
-           
+            books: books,
         };
 
         res.status(200).json(response);
     } catch (error) {
-        res.status(500).json({ message: "Erro ao pesquisar categorias", error: error.message });
+        res.status(500).json({ message: "Erro ao pesquisar livros na categoria", error: error.message });
     }
 });
+
+
+// PUT /books/:id
+router.put("/:id", async (req, res) => {
+    const {id}= req.params
+    const libraryId = parseInt(id.replace(':', ''), 10);
+    console.log(libraryId);
+    const updatedData = req.body;
+  
+    try {
+      const result = await db.collection("books").updateOne(
+        { _id: libraryId },
+        { $set: updatedData }
+      );
+  
+      if (result.matchedCount === 0) {
+        return res.status(404).send({ message: "Livro não encontrado" });
+      }
+  
+      res.status(200).send({ message: "Livro atualizado com sucesso", result });
+    } catch (error) {
+      console.error("Erro ao atualizar o livro:", error);
+      res.status(500).send({ error: "Erro ao atualizar o livro", details: error });
+    }
+  });
+  
+  // GET /books/top/:limit 
+  router.get("/top/:limit", async (req, res) => {
+    const {limit} = req.params;
+    const limit1=parseInt(limit.replace(':', ''), 10);
+    const page = parseInt(req.query.page) || 1;  
+    const pageSize = 20;  
+    const skip = (page - 1) * pageSize;  
+    
+    try {
+      const pipeline = [
+        { $addFields: { averageScore: { $avg: "$ratings" } } },  
+        { $sort: { averageScore: -1 } },  
+      ];
+  
+      if (limit1 > 20) {
+        pipeline.push({ $skip: skip });  
+        pipeline.push({ $limit: pageSize });  
+      } else {
+        pipeline.push({ $limit: limit1 });
+      }
+  
+      const books = await db.collection("books").aggregate(pipeline).toArray();
+  
+      if (limit1 > 20) {
+        const totalBooks = await db.collection("books").countDocuments();
+        const totalPages = Math.ceil(totalBooks / pageSize);
+  
+        const nextPage = page < totalPages ? `${req.protocol}://${req.get('host')}/books/top/${limit}?page=${page + 1}` : null;
+        const prevPage = page > 1 ? `${req.protocol}://${req.get('host')}/books/top/${limit}?page=${page - 1}` : null;
+  
+        const response = {
+          info: {
+            count: totalBooks,
+            pages: totalPages,
+            next: nextPage,
+            prev: prevPage,
+          },
+          results: books,
+        };
+  
+        res.status(200).send(response);
+      } else {
+        res.status(200).send({ results: books });
+      }
+    } catch (error) {
+      console.error("Erro ao buscar os melhores livros:", error);
+      res.status(500).send({ error: "Erro ao buscar os melhores livros", details: error });
+    }
+  });
+  
+  
+  
+  // GET /books/ratings/:order
+  router.get("/ratings/:order", async (req, res) => {
+    const { order } = req.params;
+    const order1= order.replace(':', '');
+  
+    if (order1 !== "asc" && order1 !== "desc") {
+      return res.status(400).send({ message: "Parametros inválidos. Use 'asc' or 'desc'." });
+    }
+  
+    const sortOrder = order1 === "asc" ? 1 : -1;
+  
+    try {
+      const pipeline = [
+        { $unwind: "$reviews" },
+        {
+          $group: {
+            _id: "$reviews.book_id",
+            reviewCount: { $sum: 1 },
+          },
+        },
+        {
+          $lookup: {
+            from: "books",
+            localField: "_id",
+            foreignField: "_id",
+            as: "bookDetails",
+          },
+        },
+        { $unwind: "$bookDetails" },
+        { $sort: { reviewCount: sortOrder } },
+        {
+          $project: {
+            _id: 0,
+            bookId: "$_id",
+            reviewCount: 1,
+            bookDetails: 1,
+          },
+        },
+      ];
+  
+      const books = await db.collection("users").aggregate(pipeline).toArray();
+      res.status(200).send(books);
+    } catch (error) {
+      console.error("Erro ao buscar livros ordenados por reviews:", error);
+      res.status(500).send({ error: "Erro ao buscar livros ordenados por reviews", details: error });
+    }
+  });
+  
+
+  //Lista de livros com mais 5 estrelas.
+  //GET /books/star
+  router.get("/star", async (req, res) => {
+    const page = parseInt(req.query.page) || 1;  
+    const pageSize = 20;  
+    const skip = (page - 1) * pageSize;  
+  
+    try {
+      const pipeline = [
+        { $unwind: "$reviews" },
+        { $match: { "reviews.score": 5 } },
+        {
+          $group: {
+            _id: "$reviews.book_id",
+            fiveStarReviews: { $sum: 1 },
+          },
+        },
+        { $match: { fiveStarReviews: { $gt: 5 } } },
+        {
+          $lookup: {
+            from: "books",
+            localField: "_id",
+            foreignField: "_id",
+            as: "bookDetails",
+          },
+        },
+        { $unwind: "$bookDetails" },
+        {
+          $project: {
+            _id: 0,
+            bookId: "$_id",
+            fiveStarReviews: 1,
+            bookDetails: 1,
+          },
+        },
+        { $sort: { fiveStarReviews: -1 } },  
+        { $skip: skip },  
+        { $limit: pageSize },  
+      ];
+  
+      const books = await db.collection("users").aggregate(pipeline).toArray();
+  
+      const totalBooks = await db.collection("users")
+        .aggregate([
+          { $unwind: "$reviews" },
+          { $match: { "reviews.score": 5 } },
+          {
+            $group: {
+              _id: "$reviews.book_id",
+              fiveStarReviews: { $sum: 1 },
+            },
+          },
+          { $match: { fiveStarReviews: { $gt: 5 } } },
+        ])
+        .toArray();
+      const totalPages = Math.ceil(totalBooks.length / pageSize);
+  
+      const nextPage = page < totalPages ? `${req.protocol}://${req.get('host')}/books/star?page=${page + 1}` : null;
+      const prevPage = page > 1 ? `${req.protocol}://${req.get('host')}/books/star?page=${page - 1}` : null;
+  
+      const response = {
+        info: {
+          count: totalBooks.length,
+          pages: totalPages,
+          next: nextPage,
+          prev: prevPage,
+        },
+        results: books,
+      };
+  
+      res.status(200).send(response);
+    } catch (error) {
+      console.error("Erro ao buscar livros com reviews com mais de 5 estrelas:", error);
+      res.status(500).send({
+        error: "Falha ao buscar livros com reviews com mais de 5 estrelas",
+        details: error,
+      });
+    }
+  });
+  
+
+//GET /books/:year
+router.get("/book/:year", async (req, res) => {
+    try {
+      const { year } = req.params;
+      const year1 = parseInt(year.replace(":", ""), 10); 
+  
+      if (isNaN(year1)) {
+        return res.status(400).send({ error: "Ano inválido" });
+      }
+  
+      console.log(year1);
+  
+      const startOfYear = new Date(year1, 0, 1); 
+      const endOfYear = new Date(year1 + 1, 0, 1); 
+  
+      const books = await db.collection("books").find({
+        publishedDate: { $gte: startOfYear, $lt: endOfYear },
+      }).toArray();
+  
+      res.status(200).send(books);
+    } catch (error) {
+      res.status(500).send({ error: "Erro ao buscar livros do ano especificado", details: error });
+    }
+  });
+  
 export default router

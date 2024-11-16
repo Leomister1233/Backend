@@ -12,12 +12,14 @@ router.get("/", async (req,res)=>{
     res.send(results).status(200);
 })
 
-//Listadeuserscompaginação.
+//Lista de users com paginação.
+//Get localhost:3000/api/users/getusers
+
 router.get("/getusers", async (req, res) => {
     try {
         const usersCollection = db.collection("users");
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
 
         const users = await usersCollection.find({}).skip(skip).limit(limit).toArray();
@@ -26,14 +28,15 @@ router.get("/getusers", async (req, res) => {
         const totalPages = Math.ceil(totalUsers / limit);
 
         const response = {
+            pagination: {
+                next: page < totalPages ? `/api/users/getusers?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/users/getusers?page=${page - 1}&limit=${limit}` : null,
+            },
             totalUsers,
             totalPages,
             currentPage: page,
             users,
-            pagination: {
-                next: page < totalPages ? `/api/users/getusers?page=${page + 1}&limit=${limit}` : null,
-                prev: page > 1 ? `/api/users/getusers?page=${page - 1}&limit=${limit}` : null,
-            }
+            
         };
 
         res.status(200).json(response);
@@ -42,6 +45,8 @@ router.get("/getusers", async (req, res) => {
     }
 });
 
+//Pesquisar pelo _id(users)
+ //Get localhost:3000/api/users/user/:id
 
 router.get('/user/:id', async (req, res) => {
     try {
@@ -118,88 +123,105 @@ router.get('/user/:id', async (req, res) => {
         res.status(500).json({ message: "Error retrieving user and top 3 books", error: error.message });
     }
 });
-router.post('/createusers',async (req,res)=>{
+
+//testing something please ignore
+router.get('/usersid',async (req, res) => {
     try{
         const usersCollection = db.collection('users');
 
-         // Retrieve the last user by sorting in descending order by `_id`
-        const lastUser = await usersCollection.find().sort({ _id: -1 }).limit(1).toArray();
-
-         // Determine the new user's ID by incrementing the last user's 
-        const newUserId = lastUser.length > 0 ? lastUser[0]._id + 1 : 1;
-        const newUsers ={
-            _id: newUserId,
-            first_name: "Nadège",
-            last_name: "Storror",
-            year_of_birth: 2015,
-            job: "Accounting Assistant IV",
-            reviews: [
-                {
-                    book_id: 2,
-                    score: 3,
-                    recommendation: true,
-                    review_date: new Date(1653163712000)
-                },
-                {
-                    book_id: 25,
-                    score: 4,
-                    recommendation: false,
-                    review_date: new Date(1717718933000)
-                },
-                {
-                    book_id: 25,
-                    score: 4,
-                    recommendation: false,
-                    review_date: new Date(1632347207000)
-                },
-                {
-                    book_id: 33,
-                    score: 2,
-                    recommendation: false,
-                    review_date: new Date(1663746778000)
-                },
-                {
-                    book_id: 13,
-                    score: 2,
-                    recommendation: false,
-                    review_date: new Date(1645737451000)
-                },
-                {
-                    book_id: 5,
-                    score: 1,
-                    recommendation: false,
-                    review_date: new Date(1610517569000)
-                },
-                {
-                    book_id: 37,
-                    score: 3,
-                    recommendation: false,
-                    review_date: new Date(1673505211000)
-                }
-            ]
+        const lastUser = await usersCollection.find({}, { projection: { _id: 1 } })
+            .sort({ _id: -1 })
+            .limit(1)
+            .toArray();
+        
+        if (lastUser.length > 0) {
+            
+            res.status(200).json(lastUser[0]._id+1);
+        } else {
+            res.status(404).json({ message: "No users found" });
         }
-        const createusers = await booksCollection.inserOne(newUsers) 
-    }catch(error){
-        res.status(500).json({message:"Error creating books", error: error.message});
+    }catch(err){
+        res.status(500).json({ message: "Error retrieving"})
     }
 })
 
-router.delete('/deleteuser/:id', async (req, res) => {
+//Adicionar 1 ou vários utilizadores. 
+//Post localhost:3000/api/users/createusers
+
+router.post('/createusers', async (req, res) => {
     try {
-        const { id } = req.params; 
-        const users_id = parseInt(id.replace(':', ''), 10);
-        const userCollection = db.collection('users');
-        const deleteusers= userCollection.db.delete({_id: users_id})
-        if (deleteusers.result.n === 0) {
-            return res.status(404).json({ message: "Livro não encontrado." });
-        }
-        if(deletebook.result.n === 1) {
-            return res.status(204).json({ message: "Livro excluído com sucesso." });  // No Content status code
-        }
+        const usersCollection = db.collection('users');
+        
+        
+        const lastUser = await usersCollection.find({}, { projection: { _id: 1 } })
+            .sort({ _id: -1 })
+            .limit(1)
+            .toArray();
+        
+        let newUserId = lastUser.length > 0 ? lastUser[0]._id + 1 : 1;  
+        //examplo de um novo user
+        const newUser = {
+            _id: newUserId,
+            first_name: "John",  
+            last_name: "Doe",    
+            year_of_birth: 1990, 
+            job: "Software Engineer", 
+            reviews: [
+                {
+                    book_id: 10,   
+                    score: 5,      
+                    recommendation: true, 
+                    review_date: new Date()  
+                },
+                {
+                    book_id: 20,   
+                    score: 4,     
+                    recommendation: false, 
+                    review_date: new Date()  
+                }
+               
+            ]
+        };
+
+        const createUser = await usersCollection.insertOne(newUser);
+
+        res.status(201).json({
+            message: "User created successfully",
+            user: createUser.ops ? createUser.ops[0] : { _id: createUser.insertedId, ...newUser }  
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Error retrieving book", error: error.message });
+        console.error(error);  
+        res.status(500).json({ message: "Error creating user", error: error.message });
     }
 });
+
+//Remover user pelo _id 
+//Delete localhost:3000/api/users/deleteuser/:id
+
+router.delete('/deleteuser/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = parseInt(id.replace(':', ''), 10); 
+        const userCollection = db.collection('users');
+
+      
+        const deleteResult = await userCollection.deleteOne({ _id: userId });
+
+        if (deleteResult.deletedCount === 0) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        return res.status(200).json({ message: "User deleted successfully." });
+    } catch (error) {
+        console.error(error); 
+        res.status(500).json({ message: "Error deleting user", error: error.message });
+    }
+});
+
+
+//Número total de reviews por “job”
+//GET localhost:3000/api/users/users/job
 
 router.get('/users/job', async (req, res) => {
     try {
@@ -209,7 +231,7 @@ router.get('/users/job', async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10; // Default limit to 10 jobs
         const skip = (page - 1) * limit;
-
+        
         // Aggregation to count reviews per job
         const jobs = await usersCollection.aggregate([
             { $unwind: "$reviews" }, // Unwind the reviews array
@@ -246,6 +268,27 @@ router.get('/users/job', async (req, res) => {
     }
 });
 
+//Update user
+//PUT localhost:3000/api/users/:id
 
+router.put("/:id", async (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id.replace(':', ''), 10); 
+    console.log(userId)
+    const updatedData = req.body;
+
+    try {
+      const result = await db.collection("users").updateOne(
+        { _id: userId },
+        { $set: updatedData }
+      );
+      if (result.matchedCount === 0) {
+        return res.status(404).send({ message: "User não encontrado" });
+      }
+      res.status(200).send({ message: "User atualizado com sucesso", result });
+    } catch (error) {
+      res.status(500).send({ error: "Erro ao atualizar o user", details: error });
+    }
+  });
 
 export default router
