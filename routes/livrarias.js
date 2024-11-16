@@ -71,8 +71,12 @@ router.post('/addbooks', async (req, res) => {
 router.get('/getbooks/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        const page = parseInt(req.query.page) || 1; // Default to page 1
+        const limit = parseInt(req.query.limit) || 10; // Default to 10 books per page
+        const skip = (page - 1) * limit; // Calculate how many books to skip
+
         const livrariasCollection = db.collection('livrarias');
-        const livrariaId = parseInt(id.replace(':', ''), 10); // Get livraria ID from request params
+        const livrariaId = parseInt(id.replace(':', ''), 10); // Parse livraria ID
         console.log(livrariaId);
 
         // Find the livraria by its ID
@@ -82,19 +86,34 @@ router.get('/getbooks/:id', async (req, res) => {
             return res.status(404).json({ message: 'Livraria not found' });
         }
 
-        // Return the books in the livraria
+        // Extract books from livraria
         const books = livraria.properties.books || [];
 
+        // Apply pagination
+        const paginatedBooks = books.slice(skip, skip + limit);
+        const totalBooks = books.length;
+        const totalPages = Math.ceil(totalBooks / limit);
+
+        // Response with paginated books
         res.status(200).json({
+            pagination: {
+                count: totalBooks,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/getbooks/${id}?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/getbooks/${id}?page=${page - 1}&limit=${limit}` : null,
+            },
             livrariaId: livraria._id,
             livrariaName: livraria.properties.INF_NOME,
-            books: books
+            books: paginatedBooks,
+            
         });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
+
 
 
 
@@ -107,23 +126,113 @@ router.get('/locatelivrarias', async (req, res) => {
             { "geometry.coordinates": "2d" }
         );
 
-        const longitude = -9.14421890064127;
-        const latitude = 38.7105419551935;
+        const longitude = parseFloat(req.query.longitude) || -9.14421890064127; // Default longitude
+        const latitude = parseFloat(req.query.latitude) || 38.7105419551935;   // Default latitude
+        const radius = parseFloat(req.query.radius) || 100; // Radius in "units" of your coordinates
 
+        const page = parseInt(req.query.page) || 1; // Default to page 1
+        const limit = parseInt(req.query.limit) || 10; // Default to 10 results per page
+        const skip = (page - 1) * limit; // Calculate the number of results to skip
+
+        // Find livrarias within the specified radius
         const results = await livrariasCollection.find({
-            "geometry.coordinates": { 
+            "geometry.coordinates": {
                 $geoWithin: {
-                    $center: [[longitude, latitude], 100] // Radius in "units" of your coordinates
+                    $center: [[longitude, latitude], radius]
                 }
             }
-        }).toArray();
+        })
+        .skip(skip)
+        .limit(limit)
+        .toArray();
 
-        // Send the results
-        res.status(200).send(results);
+        // Count the total number of matching livrarias
+        const totalLivrarias = await livrariasCollection.countDocuments({
+            "geometry.coordinates": {
+                $geoWithin: {
+                    $center: [[longitude, latitude], radius]
+                }
+            }
+        });
+
+        const totalPages = Math.ceil(totalLivrarias / limit);
+
+        // Send the paginated results
+        res.status(200).json({
+            pagination: {
+                count: totalLivrarias,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/locatelivrarias?page=${page + 1}&limit=${limit}&longitude=${longitude}&latitude=${latitude}&radius=${radius}` : null,
+                prev: page > 1 ? `/locatelivrarias?page=${page - 1}&limit=${limit}&longitude=${longitude}&latitude=${latitude}&radius=${radius}` : null,
+            },
+            livrarias: results,
+            
+        });
     } catch (err) {
-        res.status(500).send({ error: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
+
+
+router.get('/countlivrarias', async (req, res) => {
+    try {
+        const livrariasCollection = db.collection('livrarias');
+
+        // Create a 2D index on geometry.coordinates
+        await livrariasCollection.createIndex(
+            { "geometry.coordinates": "2d" }
+        );
+
+        const longitude = parseFloat(req.query.longitude) || -9.14421890064127; // Default longitude
+        const latitude = parseFloat(req.query.latitude) || 38.7105419551935;   // Default latitude
+        const radius = parseFloat(req.query.radius) || 100; // Radius in "units" of your coordinates
+
+        const page = parseInt(req.query.page) || 1; // Default to page 1
+        const limit = parseInt(req.query.limit) || 10; // Default to 10 results per page
+        const skip = (page - 1) * limit; // Calculate the number of results to skip
+
+        // Query for all results within the specified radius
+        const totalResults = await livrariasCollection.countDocuments({
+            "geometry.coordinates": {
+                $geoWithin: {
+                    $center: [[longitude, latitude], radius]
+                }
+            }
+        });
+
+        // Query for paginated results
+        const results = await livrariasCollection.find({
+            "geometry.coordinates": {
+                $geoWithin: {
+                    $center: [[longitude, latitude], radius]
+                }
+            }
+        })
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+        const totalPages = Math.ceil(totalResults / limit);
+
+        // Send the count, results, and pagination info
+        res.status(200).json({
+            pagination: {
+                count: totalResults,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/countlivrarias?page=${page + 1}&limit=${limit}&longitude=${longitude}&latitude=${latitude}&radius=${radius}` : null,
+                prev: page > 1 ? `/countlivrarias?page=${page - 1}&limit=${limit}&longitude=${longitude}&latitude=${latitude}&radius=${radius}` : null,
+            },
+            count: totalResults,
+            livrarias: results,
+            
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 
 export default router

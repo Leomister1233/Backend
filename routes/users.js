@@ -23,82 +23,98 @@ router.get("/getusers", async (req, res) => {
         const users = await usersCollection.find({}).skip(skip).limit(limit).toArray();
         const totalUsers = await usersCollection.countDocuments(); // Optional: total count for pagination info
 
-        res.status(200).json({
+        const totalPages = Math.ceil(totalUsers / limit);
+
+        const response = {
             totalUsers,
-            totalPages: Math.ceil(totalUsers / limit),
+            totalPages,
             currentPage: page,
             users,
-        });
+            pagination: {
+                next: page < totalPages ? `/api/users/getusers?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/users/getusers?page=${page - 1}&limit=${limit}` : null,
+            }
+        };
+
+        res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ message: "Error retrieving users", error: error.message });
     }
 });
 
+
 router.get('/user/:id', async (req, res) => {
     try {
-        const { id } = req.params; 
-        const userId = parseInt(id.replace(':', ''), 10);// Use ObjectId for MongoDB _id
+        const { id } = req.params;
+        const userId = parseInt(id.replace(':', ''), 10);
 
-        console.log("User ID:", userId); // Log the userId to make sure it's correct
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 3;  // Default limit to 3 reviews per user
+        const skip = (page - 1) * limit;
 
         const usersCollection = db.collection('users');
         const booksCollection = db.collection('books');
 
         const usersReview = await usersCollection.aggregate([
-            {
-                $match:{_id: userId}
-            },
-            {
-                $unwind:"$reviews"
-            },
-            {
-                $sort:{"reviews.score":-1}    
-            },
-            {
-                $limit:3
-            },
+            { $match: { _id: userId } },
+            { $unwind: "$reviews" },
+            { $sort: { "reviews.score": -1 } },
+            { $skip: skip },
+            { $limit: limit },
             {
                 $lookup: {
-                    from: "books", // Join the books collection
-                    localField: "reviews.book_id", // Match the book_id from reviews
-                    foreignField: "_id", // Match it to the book's _id
-                    as: "book_details" // Output the matched books as `book_details`
+                    from: "books", 
+                    localField: "reviews.book_id",
+                    foreignField: "_id", 
+                    as: "book_details"
                 }
             },
+            { $unwind: "$book_details" },
             {
-                $unwind: "$book_details" // Unwind the book details array (one book per review)
-            },
-            {
-                $project:{
+                $project: {
                     _id: 0,
-                    user_id: userId, 
-                    review: { // Combine the review and book details into one object
-                        book_id: "$reviews.book_id", // Include book_id from review
-                        score: "$reviews.score", // Include score from review
-                        book: { // Create a book object
-                            title: "$book_details.title", // Include book title
-                            isbn: "$book_details.isbn", // Include book ISBN
-                            thumbnail: "$book_details.thumbnailUrl" // Include book thumbnail
-                        } 
+                    user_id: userId,
+                    review: {
+                        book_id: "$reviews.book_id",
+                        score: "$reviews.score",
+                        book: {
+                            title: "$book_details.title",
+                            isbn: "$book_details.isbn",
+                            thumbnail: "$book_details.thumbnailUrl"
+                        }
                     }
                 }
             },
-        
         ]).toArray();
+
+        const totalReviews = await usersCollection.aggregate([
+            { $match: { _id: userId } },
+            { $unwind: "$reviews" },
+        ]).toArray();
+        
+        const totalPages = Math.ceil(totalReviews.length / limit);
 
         if (usersReview.length === 0) {
             return res.status(404).json({ message: "No reviews found for this user" });
         }
 
-        // Format the response
         const response = {
+            pagination: {
+                count: totalReviews.length,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/api/user/${userId}?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/user/${userId}?page=${page - 1}&limit=${limit}` : null,
+            },
             userId: userId,
-            reviews: usersReview.map(item => item.review) // Map the reviews to a simpler structure
+            reviews: usersReview.map(item => item.review),
+            
         };
-        res.status(200).json(response); // Return the top 3 books with their details
+        
+        res.status(200).json(response);
 
     } catch (error) {
-        console.error(error); // Log the full error to debug
+        console.error(error);
         res.status(500).json({ message: "Error retrieving user and top 3 books", error: error.message });
     }
 });
@@ -187,27 +203,40 @@ router.delete('/deleteuser/:id', async (req, res) => {
 
 router.get('/users/job', async (req, res) => {
     try {
-        const users = db.collection('users');
+        const usersCollection = db.collection('users');
+
+        // Pagination parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10; // Default limit to 10 jobs
+        const skip = (page - 1) * limit;
 
         // Aggregation to count reviews per job
-        const jobs = await users.aggregate([
-            {
-                $unwind: "$reviews"  // Unwind the reviews array
-            },
+        const jobs = await usersCollection.aggregate([
+            { $unwind: "$reviews" }, // Unwind the reviews array
             {
                 $group: {
                     _id: "$job",  // Group by job
                     totalreview: { $sum: 1 }  // Count the number of reviews for each job
                 }
             },
-            {
-                $sort: { totalreview: -1 }  // Sort by total reviews in descending order
-            }
-        ]).toArray();  // Convert the cursor to an array
+            { $sort: { totalreview: -1 } },  // Sort by total reviews in descending order
+            { $skip: skip }, // Apply pagination
+            { $limit: limit }
+        ]).toArray(); // Convert the cursor to an array
 
-        // Proper response object
-        const response = {
-            results: jobs
+        // Count total unique jobs
+        const totalJobs = await usersCollection.distinct("job");
+        const totalPages = Math.ceil(totalJobs.length / limit);
+
+        const response = { 
+                pagination: {
+                count: totalJobs.length,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/api/users/job?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/users/job?page=${page - 1}&limit=${limit}` : null,
+            },
+            results: jobs           
         };
 
         res.status(200).json(response);
@@ -216,6 +245,7 @@ router.get('/users/job', async (req, res) => {
         res.status(500).json({ err: err.message });
     }
 });
+
 
 
 export default router

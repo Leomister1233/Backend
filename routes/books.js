@@ -276,14 +276,18 @@ router.get('/comments', async (req, res) => {
 });
 
 
-router.get('/search/categories',async (req,res)=>{
-    try{
-        const booksCollection = await db.collection('books');
-        const categories= "Open Source"
-        const searchbook = await booksCollection.aggregate([
-            {
-                $unwind: "$categories" // Unwind the categories array
-            },
+router.get('/search/categories', async (req, res) => {
+    try {
+        const booksCollection = db.collection('books');
+
+        // Pagination parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10; // Default limit to 10 categories
+        const skip = (page - 1) * limit;
+
+        // Search and paginate categories
+        const categories = await booksCollection.aggregate([
+            { $unwind: "$categories" }, // Unwind the categories array
             {
                 $group: {
                     _id: "$categories", // Group by category
@@ -293,26 +297,35 @@ router.get('/search/categories',async (req,res)=>{
                             title: "$title",
                             authors: "$authors",
                             publishedDate: "$publishedDate",
-                            thumbnailUrl: "$thumbnailUrl"
-                        }
-                    }
-                }
+                            thumbnailUrl: "$thumbnailUrl",
+                        },
+                    },
+                },
             },
-            {
-                $sort: { _id: 1 } // Sort categories alphabetically
-            }
+            { $sort: { _id: 1 } }, // Sort categories alphabetically
+            { $skip: skip }, // Apply pagination
+            { $limit: limit },
         ]).toArray();
 
+        // Count total unique categories
+        const totalCategories = await booksCollection.distinct("categories");
+        const totalPages = Math.ceil(totalCategories.length / limit);
+
         const response = {
-            books:searchbook
-        }
+                pagination: {
+                count: totalCategories.length,
+                pages: totalPages,
+                currentPage: page,
+                next: page < totalPages ? `/api/books/search/categories?page=${page + 1}&limit=${limit}` : null,
+                prev: page > 1 ? `/api/books/search/categories?page=${page - 1}&limit=${limit}` : null,
+            },
+            categories: categories,
+           
+        };
 
         res.status(200).json(response);
-
-    }catch(error){
-        res.status(500).json({message:"Error searching categories", error: error.message});
+    } catch (error) {
+        res.status(500).json({ message: "Erro ao pesquisar categorias", error: error.message });
     }
-})
-
-
+});
 export default router
