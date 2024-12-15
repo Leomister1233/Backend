@@ -152,7 +152,6 @@ router.post('/createusers', async (req, res) => {
     try {
         const usersCollection = db.collection('users');
         
-        
         const lastUser = await usersCollection.find({}, { projection: { _id: 1 } })
             .sort({ _id: -1 })
             .limit(1)
