@@ -1,3 +1,4 @@
+import cors from 'cors'
 import express from "express";
 import books from "./routes/books.js";
 import comments from "./routes/comments.js";
@@ -11,6 +12,7 @@ const app = express();
 const port = process.env.PORT ; // Fixed typo here
 
 app.use(express.json());
+app.use(cors())
 app.get('/', (req, res) => {
     res.send("Welcome to the API! Use /api/books to access books data.");
 });
